@@ -1,0 +1,6 @@
+Flask == 3.1.2 # Latest version of the "instruction book"
+flask-session == 0.8.0 # Handles sessions - a way to remember a logged-in user across multiple requests
+flask-cors == 6.0.2 # Handles CORS (Cross-Origin Resource Sharing) - a way to allow the frontend (which runs in the browser) to talk to the backend (which runs on a server)
+mysql-connector-python == 9.0.0 # MySQL connector for Python - a library to connect Python to MySQL
+icecream == 2.1.10 # Debugging tool for Python
+Flask-JWT-Extended == 4.7.1 # JWT implementation for Flask - a way to handle authentication and authorization in the backend
