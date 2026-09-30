@@ -23,6 +23,7 @@ CREATE TABLE washes (
   hall_id VARCHAR(32) NOT NULL,
   tier VARCHAR(20) NOT NULL,
   washed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  rating TINYINT NULL,  
   FOREIGN KEY (user_id) REFERENCES users(user_id),
   FOREIGN KEY (hall_id) REFERENCES wash_halls(hall_id)
 );

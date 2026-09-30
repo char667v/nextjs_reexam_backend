@@ -125,7 +125,8 @@ def validate_uuid4_paranoia(uuid4):
     return uuid
 
 ##############################
-def send_email(receiver_email, html):
+def send_email(receiver_email, html, subject="Wash World"):
+        # subject="Wash World" → default value: calls that don't pass a subject still work
     try:
         # Create a gmail fullflaskdemomail
         # Enable (turn on) 2 step verification/factor in the google account manager
@@ -133,28 +134,36 @@ def send_email(receiver_email, html):
         # Copy the key :
  
         # Email and password of the sender's Gmail account
-        sender_email = "charlieeskea@gmail.com"
-        password = "ytmo holo ilif ebas"
+        sender_email = os.environ.get("EMAIL_SENDER")
+        password = os.environ.get("EMAIL_APP_PASSWORD")
 
         # Create the email message
-        message = MIMEMultipart()
-        message["From"] = "WashWorld Exam"
-        message["To"] = receiver_email
-        message["Subject"] = "Velkommen til Wash World"
+        message = MIMEMultipart()                   # an empty email "envelope"
+        message["From"] = "WashWorld Re-Exam"       # sender name shown in the inbox
+        message["To"] = receiver_email              # who receives it
+        message["Subject"] = subject                # now each route decides the subject
 
-        message.attach(MIMEText(html, "html"))
+        message.attach(MIMEText(html, "html"))      # put the HTML content inside
 
         # Connect to Gmail's SMTP server and send the email
-        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:  # connect to Gmail
             server.starttls() # Upgrade the connection to secure
-            server.login(sender_email, password)
+            server.login(sender_email, password)              # log in with .env values
             server.sendmail(sender_email, receiver_email, message.as_string())
-            print("Email sent successfully!")
+            print("Email sent successfully!")                 # confirmation in Docker logs
 
         return "email sent"
 
     except Exception as ex:
-        ic(ex)
+        ic(ex)                                      # print the error to the logs
         return "cannot send email", 500
     finally:
         pass
+
+##############################
+REGEX_LICENSE_PLATE = "^[A-Z0-9 ]{2,10}$"
+def validate_license_plate(license_plate):
+    license_plate = license_plate.strip().upper()    # " ab12345 " → "AB12345"
+    if not re.match(REGEX_LICENSE_PLATE, license_plate):
+        raise Exception("company_exception license_plate")
+    return license_plate

@@ -10,6 +10,8 @@ services:
       - 80:80 # 0 - 1024 reserved. Use any port from 1025 to 65535
     volumes:
       - .:/app
+    env_file:
+      - .env
  
   mariadb: # the database (where all the actual data lives)
     image: mariadb:10.6.20
