@@ -1,27 +1,38 @@
-from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-from werkzeug.security import generate_password_hash, check_password_hash
+from flask import Flask, render_template, request, jsonify #are we using this?: session, redirect, send_from_directory
 import uuid
-import os
 import x
+import os
+import time
+from flask_session import Session
+from werkzeug.security import generate_password_hash, check_password_hash
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
+
+from flask_cors import CORS
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
+import x                                  
+from icecream import ic
+ic.configureOutput(prefix=f"_____ | ", includeContext=True)
 
 app = Flask(__name__)
-CORS(app)
-
+CORS(app)# allows everything
+# app.config['SESSION_TYPE'] = 'filesystem'
+# Session(app)
 app.config["JWT_SECRET_KEY"] = os.environ.get("JWT_SECRET_KEY", "dev-secret-change-me")
 jwt = JWTManager(app)
 
-########################### api-signup ###############################
+########################### api-signup ###########################
 @app.post("/api-signup")
 def signup():
     try:
-        data = request.json
+        data = request.get_json(silent=True) or {}
         name = x.validate_user_name(data.get("user_name", ""))
         email = x.validate_email(data.get("user_email", ""))
         password = x.validate_user_password(data.get("user_password", ""))
-        # license_plate = data.get("license_plate", "")
-        license_plate = x.validate_license_plate(str(data.get("license_plate", ""))) #wrapping it in a validator
+        # license_plate = data.get("license_plate", "")                                ← OLD: no validation (inactive)
+        license_plate = x.validate_license_plate(str(data.get("license_plate", "")))  # wrapping it in a validator   ← NEW: validated (active)
     except Exception:
         return jsonify({"message": "Ugyldige oplysninger"}), 400
 
@@ -54,7 +65,7 @@ def signup():
         return jsonify({"message": "Bruger oprettet. Tjek din email for at bekræfte kontoen."}), 201
 
     except Exception as ex:
-        print(ex, flush=True)
+        ic(ex)
         return jsonify({"message": "Kunne ikke oprette bruger"}), 500
 
     finally:
@@ -86,7 +97,7 @@ def verify_email():
         return "<p>Din konto er nu bekræftet! Du kan nu logge ind.</p>", 200
 
     except Exception as ex:
-        print(ex, flush=True)
+        ic(ex)
         return "<p>Noget gik galt.</p>", 500
 
     finally:
@@ -96,7 +107,7 @@ def verify_email():
 ###################### api-forgot-password ############################
 @app.post("/api-forgot-password")
 def forgot_password():
-    data = request.json
+    data = request.get_json(silent=True) or {}
     try:
         email = x.validate_email(data.get("user_email", ""))
     except Exception:
@@ -126,7 +137,7 @@ def forgot_password():
         return jsonify({"message": "Hvis emailen findes, er der sendt et nulstillingslink"}), 200
 
     except Exception as ex:
-        print(ex, flush=True)
+        ic(ex)
         return jsonify({"message": "Noget gik galt"}), 500
 
     finally:
@@ -137,14 +148,12 @@ def forgot_password():
 
 @app.post("/api-reset-password")
 def reset_password():
-    data = request.json
+    data = request.get_json(silent=True) or {}
     try:
         token = x.validate_uuid4(data.get("token", ""))
         new_password = x.validate_user_password(data.get("new_user_password", ""))
-    # except Exception:
-    #     return jsonify({"message": "Ugyldige oplysninger"}), 400
     except Exception as ex:
-        print(ex, flush=True)          # NEW: print the real validator error to the Docker logs
+        ic(ex)          
         return jsonify({"message": "Ugyldige oplysninger"}), 400
 
     db, cursor = x.db()
@@ -165,7 +174,7 @@ def reset_password():
         return jsonify({"message": "Adgangskode nulstillet"}), 200
 
     except Exception as ex:
-        print(ex, flush=True)
+        ic(ex)
         return jsonify({"message": "Kunne ikke nulstille adgangskode"}), 500
 
     finally:
@@ -226,7 +235,7 @@ def login():
 
 # ── 7. SAFETY NET AND CLEANUP (backend only) ─────────────────────────
     except Exception as ex:
-        print(ex, flush=True)
+        ic(ex)
         return jsonify({"message": "Login fejlede"}), 500
 
     finally:
@@ -248,7 +257,7 @@ def get_my_info():
     db, cursor = x.db()
     try:
         cursor.execute(
-            "SELECT user_id, name, email, license_plate, membership_tier FROM users WHERE user_id = %s",
+            "SELECT user_id, name, email, license_plate, phone, membership_tier FROM users WHERE user_id = %s",
             (user_id,),
         )
         user = cursor.fetchone()
@@ -259,7 +268,7 @@ def get_my_info():
         return jsonify({"user": user}), 200
 
     except Exception as ex:
-        print(ex, flush=True)
+        ic(ex)
         return jsonify({"message": "Kunne ikke hente bruger"}), 500
 
     finally:
@@ -274,15 +283,18 @@ def update_my_info():
     data = request.get_json(silent=True) or {}
 
     name = data.get("user_name")                     # None if not sent
+    phone = data.get("user_phone")                   
     license_plate = data.get("license_plate")
     membership_tier = data.get("membership_tier")
 
-    if name is None and license_plate is None and membership_tier is None:
+    if name is None and license_plate is None and membership_tier is None and phone is None:
         return jsonify({"message": "Intet at opdatere"}), 400
 
     try:                                             # validate only what was sent
         if name is not None:
             name = x.validate_user_name(str(name))
+        if phone is not None:                                       
+            phone = x.validate_user_phone(str(phone))
         if license_plate is not None:
             license_plate = x.validate_license_plate(str(license_plate))
         if membership_tier is not None:
@@ -290,13 +302,15 @@ def update_my_info():
             if membership_tier not in ["Guld", "Premium", "Brilliant"]:
                 raise Exception("company_exception membership_tier")
     except Exception as ex:
-        print(ex, flush=True)
+        ic(ex)
         return jsonify({"message": "Ugyldige oplysninger"}), 400
 
     db, cursor = x.db()
     try:
         if name is not None:
             cursor.execute("UPDATE users SET name = %s WHERE user_id = %s", (name, user_id))
+        if phone is not None:                                      
+            cursor.execute("UPDATE users SET phone = %s WHERE user_id = %s", (phone, user_id))
         if license_plate is not None:
             cursor.execute("UPDATE users SET license_plate = %s WHERE user_id = %s", (license_plate, user_id))
         if membership_tier is not None:
@@ -306,7 +320,7 @@ def update_my_info():
         return jsonify({"message": "Oplysninger opdateret"}), 200
 
     except Exception as ex:
-        print(ex, flush=True)
+        ic(ex)
         return jsonify({"message": "Kunne ikke opdatere oplysninger"}), 500
 
     finally:
@@ -337,7 +351,7 @@ def delete_account():
         return jsonify({"message": "Konto slettet"}), 200
 
     except Exception as ex:
-        print(ex, flush=True)
+        ic(ex)
         db.rollback()                                            # undo everything if anything failed
         return jsonify({"message": "Kunne ikke slette konto"}), 500
 
@@ -356,7 +370,7 @@ def get_wash_halls():
         return jsonify({"wash_halls": wash_halls}), 200
 
     except Exception as ex:
-        print(ex, flush=True)
+        ic(ex)
         return jsonify({"message": "Kunne ikke hente vaskehaller"}), 500
 
     finally:
@@ -376,7 +390,7 @@ def start_wash():
         if tier not in ["Guld", "Premium", "Brilliant"]:
             raise Exception("company_exception tier")
     except Exception as ex:
-        print(ex, flush=True)
+        ic(ex)
         return jsonify({"message": "Ugyldige oplysninger"}), 400
 
     db, cursor = x.db()
@@ -394,7 +408,7 @@ def start_wash():
         return jsonify({"wash_id": wash_id}), 201
 
     except Exception as ex:
-        print(ex, flush=True)
+        ic(ex)
         return jsonify({"message": "Kunne ikke starte vask"}), 500
 
     finally:
@@ -425,7 +439,7 @@ def get_my_wash_history():
         return jsonify({"washes": washes}), 200
 
     except Exception as ex:
-        print(ex, flush=True)
+        ic(ex)
         return jsonify({"message": "Kunne ikke hente vaskehistorik"}), 500
 
     finally:
@@ -447,25 +461,38 @@ def rate_wash():
         if rating < 1 or rating > 5:
             raise Exception("company_exception rating")
     except Exception as ex:
-        print(ex, flush=True)
+        ic(ex)
         return jsonify({"message": "Ugyldige oplysninger"}), 400
 
+    # db, cursor = x.db()
+    # try:
+    #     cursor.execute(
+    #         "UPDATE washes SET rating = %s WHERE wash_id = %s AND user_id = %s",
+    #         (rating, wash_id, user_id),
+    #     )
+    #     # "Hey database, set this rating on this wash, but only if it belongs to this user"
+    #     db.commit()
+
+    #     if cursor.rowcount == 0:
+    #         return jsonify({"message": "Vask ikke fundet"}), 404
+
+    #     return jsonify({"message": "Bedømmelse gemt"}), 200
     db, cursor = x.db()
     try:
         cursor.execute(
-            "UPDATE washes SET rating = %s WHERE wash_id = %s AND user_id = %s",
-            (rating, wash_id, user_id),
+            "SELECT wash_id FROM washes WHERE wash_id = %s AND user_id = %s",
+            (wash_id, user_id),
         )
-        # "Hey database, set this rating on this wash, but only if it belongs to this user"
-        db.commit()
-
-        if cursor.rowcount == 0:
+        # "Hey database, does this wash exist, and does it belong to this user?"
+        if not cursor.fetchone():
             return jsonify({"message": "Vask ikke fundet"}), 404
 
+        cursor.execute("UPDATE washes SET rating = %s WHERE wash_id = %s", (rating, wash_id))
+        db.commit()
         return jsonify({"message": "Bedømmelse gemt"}), 200
 
     except Exception as ex:
-        print(ex, flush=True)
+        ic(ex)
         return jsonify({"message": "Kunne ikke gemme bedømmelse"}), 500
 
     finally:

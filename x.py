@@ -42,7 +42,7 @@ def no_cache(view):
 def format_epoch_date(epoch_value):
     return datetime.fromtimestamp(epoch_value).strftime("%Y-%m-%d")
 
-##############################
+############# NAME VALIDATION #################
 USER_NAME_MIN = 2
 USER_NAME_MAX = 20
 REGEX_USER_NAME = f"^.{{{USER_NAME_MIN},{USER_NAME_MAX}}}$"
@@ -52,27 +52,7 @@ def validate_user_name(user_name):
         raise Exception("company_exception user_name")
     return user_name
 
-##############################
-# USER_FIRST_NAME_MIN = 2
-# USER_FIRST_NAME_MAX = 20
-# REGEX_USER_FIRST_NAME = f"^.{{{USER_FIRST_NAME_MIN},{USER_FIRST_NAME_MAX}}}$"
-# def validate_user_first_name(user_first_name):
-#     user_first_name = user_first_name.strip()
-#     if not re.match(REGEX_USER_FIRST_NAME, user_first_name):
-#         raise Exception("company_exception user_first_name")
-#     return user_first_name
-
-# ##############################
-# USER_LAST_NAME_MIN = 2
-# USER_LAST_NAME_MAX = 20
-# REGEX_USER_LAST_NAME = f"^.{{{USER_LAST_NAME_MIN},{USER_LAST_NAME_MAX}}}$"
-# def validate_user_last_name(user_last_name):
-#     user_last_name = user_last_name.strip()
-#     if not re.match(REGEX_USER_LAST_NAME, user_last_name):
-#         raise Exception("company_exception user_last_name")
-#     return user_last_name
-
-##############################
+############## EMAIL VALIDATION ################
 REGEX_EMAIL = "^(([^<>()[\]\\.,;:\s@\"]+(\.[^<>()[\]\\.,;:\s@\"]+)*)|(\".+\"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$"
 def validate_email(email):
     email = email.strip()
@@ -80,17 +60,7 @@ def validate_email(email):
         raise Exception("company_exception email")
     return email
 
-##############################
-# USER_ADDRESS_MIN = 8
-# USER_ADDRESS_MAX = 200
-# REGEX_USER_ADDRESS =f"^.{{{USER_ADDRESS_MIN},{USER_ADDRESS_MAX}}}$"
-# def validate_user_address(user_address):
-#     user_address = user_address.strip()
-#     if not re.match(REGEX_USER_ADDRESS, user_address):
-#         raise Exception("company_exception user_address")
-#     return user_address
-
-##############################
+############## PHONE VALIDATION ################
 REGEX_USER_PHONE = "^(\+45)?\s?(\d{2}\s?){4}$"
 def validate_user_phone(user_phone):
     user_phone = user_phone.strip()
@@ -98,7 +68,7 @@ def validate_user_phone(user_phone):
         raise Exception("company_exception user_phone")
     return user_phone
 
-##############################
+########### PASSWORD VALIDATION ###################
 USER_PASSWORD_MIN = 8
 USER_PASSWORD_MAX = 50
 REGEX_USER_PASSWORD = f"^.{{{USER_PASSWORD_MIN},{USER_PASSWORD_MAX}}}$"
@@ -107,7 +77,7 @@ def validate_user_password(password):
         raise Exception("company_exception user_password")
     return password
 
-##############################
+############## UUID VALIDATION ##################
 # 0 to 9 letters a to f
 REGEX_UUID4 = "^[0-9a-f]{32}$"
 def validate_uuid4(uuid4):
@@ -116,15 +86,7 @@ def validate_uuid4(uuid4):
         raise Exception("company_exception uuid4 invalid")
     return uuid_value
 
-##############################
-REGEX_UUID4_PARANOIA = "^[0-9a-f]{64}$"
-def validate_uuid4_paranoia(uuid4):
-    uuid = uuid4.strip()
-    if not re.match(REGEX_UUID4_PARANOIA, uuid):
-        raise Exception("company_exception paranoia")
-    return uuid
-
-##############################
+############# EMAIL SENDING #################
 def send_email(receiver_email, html, subject="Wash World"):
         # subject="Wash World" → default value: calls that don't pass a subject still work
     try:
@@ -150,7 +112,7 @@ def send_email(receiver_email, html, subject="Wash World"):
             server.starttls() # Upgrade the connection to secure
             server.login(sender_email, password)              # log in with .env values
             server.sendmail(sender_email, receiver_email, message.as_string())
-            print("Email sent successfully!")                 # confirmation in Docker logs
+            print("Email sent successfully!", flush=True)                 # confirmation in Docker logs
 
         return "email sent"
 
@@ -160,7 +122,7 @@ def send_email(receiver_email, html, subject="Wash World"):
     finally:
         pass
 
-##############################
+############# LICENSE PLATE VALIDATION ##################
 REGEX_LICENSE_PLATE = "^[A-Z0-9 ]{2,10}$"
 def validate_license_plate(license_plate):
     license_plate = license_plate.strip().upper()    # " ab12345 " → "AB12345"
