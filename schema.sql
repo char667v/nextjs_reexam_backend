@@ -1,14 +1,15 @@
 CREATE TABLE users (
   user_id VARCHAR(32) PRIMARY KEY,
-  name VARCHAR(20) NOT NULL,
-  email VARCHAR(150) UNIQUE NOT NULL,
-  password_hash VARCHAR(255) NOT NULL,
+  user_name VARCHAR(20) NOT NULL,
+  user_email VARCHAR(150) UNIQUE NOT NULL,
+  user_password_hash VARCHAR(255) NOT NULL,
   license_plate VARCHAR(20),
   membership_tier VARCHAR(20) DEFAULT 'Guld',
   verification_key VARCHAR(32),
   verified_at TIMESTAMP NULL,
   reset_token VARCHAR(32),
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  user_phone VARCHAR(20) NULL
 );
 
 CREATE TABLE wash_halls (

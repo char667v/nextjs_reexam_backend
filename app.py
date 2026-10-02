@@ -33,12 +33,18 @@ def signup():
         password = x.validate_user_password(data.get("user_password", ""))
         # license_plate = data.get("license_plate", "")                                ← OLD: no validation (inactive)
         license_plate = x.validate_license_plate(str(data.get("license_plate", "")))  # wrapping it in a validator   ← NEW: validated (active)
+        phone = data.get("user_phone")
+        if phone:
+            phone = x.validate_user_phone(str(phone))
+        else:
+            phone = None
+
     except Exception:
         return jsonify({"message": "Ugyldige oplysninger"}), 400
 
     db, cursor = x.db()
     try:
-        cursor.execute("SELECT user_id FROM users WHERE email = %s", (email,))
+        cursor.execute("SELECT user_id, user_name FROM users WHERE user_email = %s", (email,))
         if cursor.fetchone():
             return jsonify({"message": "Email er allerede i brug"}), 409
 
@@ -48,9 +54,9 @@ def signup():
 
         cursor.execute(
             """INSERT INTO users
-               (user_id, name, email, password_hash, license_plate, verification_key)
-               VALUES (%s, %s, %s, %s, %s, %s)""",
-            (user_id, name, email, password_hash, license_plate, verification_key),
+               (user_id, user_name, user_email, user_password_hash, license_plate, verification_key, user_phone)
+               VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+            (user_id, name, email, password_hash, license_plate, verification_key, phone),
         )
         db.commit()
 
@@ -115,7 +121,7 @@ def forgot_password():
 
     db, cursor = x.db()
     try:
-        cursor.execute("SELECT user_id, name FROM users WHERE email = %s", (email,))
+        cursor.execute("SELECT user_id, user_name FROM users WHERE user_email = %s", (email,))
         user = cursor.fetchone()
 
         if user:
@@ -128,7 +134,7 @@ def forgot_password():
 
             reset_link = f"http://localhost:3000/pages/resetPassword?token={reset_token}"
             html = f"""
-                <p>Hej {user['name']},</p>
+                <p>Hej {user['user_name']},</p>
                 <p>Klik her for at nulstille din adgangskode:</p>
                 <a href="{reset_link}">Nulstil min adgangskode</a>
             """
@@ -166,7 +172,7 @@ def reset_password():
 
         password_hash = generate_password_hash(new_password)
         cursor.execute(
-            "UPDATE users SET password_hash = %s, reset_token = NULL WHERE user_id = %s",
+            "UPDATE users SET user_password_hash = %s, reset_token = NULL WHERE user_id = %s",
             (password_hash, user["user_id"]),
         )
         db.commit()
@@ -210,11 +216,11 @@ def login():
 # ── 3. SQL QUERY (arrow: backend → database) ─────────────────────────
     db, cursor = x.db()                                 # only now: ask the database
     try:
-        cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
+        cursor.execute("SELECT * FROM users WHERE user_email = %s", (email,))
 # ── 4. ROWS BACK (arrow: database → backend) ─────────────────────────
         user = cursor.fetchone()
 # ── 5. BACKEND LOGIC: decide the answer (inside the backend box) ─────
-        if not user or not check_password_hash(user["password_hash"], password):
+        if not user or not check_password_hash(user["user_password_hash"], password):
             return jsonify({"message": "Forkert email eller adgangskode"}), 401
 
         if not user["verified_at"]:
@@ -226,8 +232,8 @@ def login():
             "access_token": access_token,
             "user": {
                 "user_id": user["user_id"],
-                "name": user["name"],
-                "email": user["email"],
+                "user_name": user["user_name"],
+                "user_email": user["user_email"],
                 "license_plate": user["license_plate"],
                 "membership_tier": user["membership_tier"],
             },
@@ -257,7 +263,7 @@ def get_my_info():
     db, cursor = x.db()
     try:
         cursor.execute(
-            "SELECT user_id, name, email, license_plate, phone, membership_tier FROM users WHERE user_id = %s",
+        "SELECT user_id, user_name, user_email, license_plate, user_phone, membership_tier FROM users WHERE user_id = %s",
             (user_id,),
         )
         user = cursor.fetchone()
@@ -308,9 +314,9 @@ def update_my_info():
     db, cursor = x.db()
     try:
         if name is not None:
-            cursor.execute("UPDATE users SET name = %s WHERE user_id = %s", (name, user_id))
+            cursor.execute("UPDATE users SET user_name = %s WHERE user_id = %s", (name, user_id))
         if phone is not None:                                      
-            cursor.execute("UPDATE users SET phone = %s WHERE user_id = %s", (phone, user_id))
+            cursor.execute("UPDATE users SET user_phone = %s WHERE user_id = %s", (phone, user_id))
         if license_plate is not None:
             cursor.execute("UPDATE users SET license_plate = %s WHERE user_id = %s", (license_plate, user_id))
         if membership_tier is not None:
