@@ -42,6 +42,9 @@ def signup():
             phone = x.validate_user_phone(str(phone))
         else:
             phone = None
+        membership_tier = str(data.get("membership_tier", "Guld")).strip()
+        if membership_tier not in ["Guld", "Premium", "Brilliant"]:
+            raise Exception("company_exception membership_tier")
 
     except Exception:
         return jsonify({"message": "Ugyldige oplysninger"}), 400
@@ -58,10 +61,11 @@ def signup():
 
         cursor.execute(
             """INSERT INTO users
-               (user_id, user_name, user_email, user_password_hash, license_plate, verification_key, user_phone)
-               VALUES (%s, %s, %s, %s, %s, %s, %s)""",
-            (user_id, name, email, password_hash, license_plate, verification_key, phone),
+               (user_id, user_name, user_email, user_password_hash, license_plate, verification_key, user_phone, membership_tier)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+            (user_id, name, email, password_hash, license_plate, verification_key, phone, membership_tier),
         )
+        
         db.commit()
 
         verify_link = f"http://localhost:80/api-verify-email?key={verification_key}"
