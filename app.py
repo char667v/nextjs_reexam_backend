@@ -1,8 +1,9 @@
-from flask import Flask, render_template, request, jsonify #are we using this?: session, redirect, send_from_directory
+from flask import Flask, render_template, request, jsonify 
 import uuid
 import x
 import os
 import time
+from datetime import timedelta
 from flask_session import Session
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
@@ -11,8 +12,6 @@ from flask_cors import CORS
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-
-from datetime import timedelta
 
 import x                                  
 from icecream import ic
@@ -23,9 +22,14 @@ CORS(app)# allows everything
 # app.config['SESSION_TYPE'] = 'filesystem'
 # Session(app)
 app.config["JWT_SECRET_KEY"] = os.environ.get("JWT_SECRET_KEY", "dev-secret-change-me")
-# app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=1)
-app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=20) # NEW: shorter expiration for testing
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=20)
 jwt = JWTManager(app)
+
+########################### health check ###########################
+@app.get("/")
+def index():
+    return jsonify({"status": "ok", "message": "Connected and running"}), 200
+# visible in the browser at http://localhost:80
 
 ########################### api-signup ###########################
 @app.post("/api-signup")
@@ -46,14 +50,27 @@ def signup():
         if membership_tier not in ["Guld", "Premium", "Brilliant"]:
             raise Exception("company_exception membership_tier")
 
-    except Exception:
-        return jsonify({"message": "Ugyldige oplysninger"}), 400
+    except Exception as ex:
+        ic(ex)
+        if "company_exception user_name" in str(ex):
+            return jsonify({"status": "error", "message": f"Navn skal være {x.USER_NAME_MIN}–{x.USER_NAME_MAX} tegn"}), 400
+        if "company_exception email" in str(ex):
+            return jsonify({"status": "error", "message": "Ugyldig email"}), 400
+        if "company_exception user_password" in str(ex):
+            return jsonify({"status": "error", "message": f"Adgangskoden skal være {x.USER_PASSWORD_MIN}–{x.USER_PASSWORD_MAX} tegn"}), 400
+        if "company_exception license_plate" in str(ex):
+            return jsonify({"status": "error", "message": f"Nummerpladen skal være {x.LICENSE_PLATE_MIN}–{x.LICENSE_PLATE_MAX} tegn"}), 400
+        if "company_exception user_phone" in str(ex):
+            return jsonify({"status": "error", "message": "Ugyldigt telefonnummer"}), 400
+        if "company_exception membership_tier" in str(ex):
+            return jsonify({"status": "error", "message": "Ugyldigt medlemskab"}), 400
+        return jsonify({"status": "error", "message": "Ugyldige oplysninger"}), 400
 
     db, cursor = x.db()
     try:
         cursor.execute("SELECT user_id, user_name FROM users WHERE user_email = %s", (email,))
         if cursor.fetchone():
-            return jsonify({"message": "Email er allerede i brug"}), 409
+            return jsonify({"status": "error", "message": "Email er allerede i brug"}), 409
 
         user_id = uuid.uuid4().hex
         verification_key = uuid.uuid4().hex
@@ -65,22 +82,17 @@ def signup():
                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
             (user_id, name, email, password_hash, license_plate, verification_key, phone, membership_tier),
         )
-        
         db.commit()
 
         verify_link = f"http://localhost:80/api-verify-email?key={verification_key}"
-        html = f"""
-            <p>Velkommen til Wash World, {name}!</p>
-            <p>Bekræft din email for at aktivere din konto:</p>
-            <a href="{verify_link}">Bekræft min email</a>
-        """
+        html = render_template("email_signup.html", name=name, verify_link=verify_link)
         x.send_email(email, html, subject="Bekræft venligst din email")
 
-        return jsonify({"message": "Bruger oprettet. Tjek din email for at bekræfte kontoen."}), 201
+        return jsonify({"status": "ok", "message": "Bruger oprettet. Tjek din email for at bekræfte kontoen."}), 201
 
     except Exception as ex:
         ic(ex)
-        return jsonify({"message": "Kunne ikke oprette bruger"}), 500
+        return jsonify({"status": "error", "message": "Kunne ikke oprette bruger"}), 500
 
     finally:
         cursor.close()
@@ -92,27 +104,25 @@ def verify_email():
     try:
         key = x.validate_uuid4(request.args.get("key", ""))
     except Exception:
-        return "<p>Ugyldigt bekræftelseslink.</p>", 400
+        return jsonify({"status": "error", "message": "Ugyldigt bekræftelseslink"}), 400
 
     db, cursor = x.db()
     try:
-        cursor.execute("SELECT user_id FROM users WHERE verification_key = %s", (key,))
-        user = cursor.fetchone()
-
-        if not user:
-            return "<p>Bekræftelseslink ikke fundet.</p>", 404
-
         cursor.execute(
-            "UPDATE users SET verified_at = NOW() WHERE user_id = %s",
-            (user["user_id"],),
+            "UPDATE users SET verified_at = NOW() WHERE verification_key = %s AND verified_at IS NULL",
+            (key,),
         )
+        # "Hey database, verify the user with this key, but only if not verified already"
         db.commit()
 
-        return "<p>Din konto er nu bekræftet! Du kan nu logge ind.</p>", 200
+        if cursor.rowcount == 0:
+            return jsonify({"status": "error", "message": "Linket er ugyldigt eller allerede brugt"}), 404
+
+        return jsonify({"status": "ok", "message": "Din konto er nu bekræftet! Du kan nu logge ind."}), 200
 
     except Exception as ex:
         ic(ex)
-        return "<p>Noget gik galt.</p>", 500
+        return jsonify({"status": "error", "message": "Noget gik galt"}), 500
 
     finally:
         cursor.close()
@@ -125,7 +135,7 @@ def forgot_password():
     try:
         email = x.validate_email(data.get("user_email", ""))
     except Exception:
-        return jsonify({"message": "Ugyldig email"}), 400
+        return jsonify({"status": "error", "message": "Ugyldig email"}), 400
 
     db, cursor = x.db()
     try:
@@ -141,18 +151,14 @@ def forgot_password():
             db.commit()
 
             reset_link = f"http://localhost:3000/pages/resetPassword?token={reset_token}"
-            html = f"""
-                <p>Hej {user['user_name']},</p>
-                <p>Klik her for at nulstille din adgangskode:</p>
-                <a href="{reset_link}">Nulstil min adgangskode</a>
-            """
+            html = render_template("email_forgot_password.html", name=user["user_name"], reset_link=reset_link)
             x.send_email(email, html, subject="Nulstil din adgangskode")
 
-        return jsonify({"message": "Hvis emailen findes, er der sendt et nulstillingslink"}), 200
+        return jsonify({"status": "ok", "message": "Hvis emailen findes, er der sendt et nulstillingslink"}), 200
 
     except Exception as ex:
         ic(ex)
-        return jsonify({"message": "Noget gik galt"}), 500
+        return jsonify({"status": "error", "message": "Noget gik galt"}), 500
 
     finally:
         cursor.close()
@@ -167,29 +173,29 @@ def reset_password():
         token = x.validate_uuid4(data.get("token", ""))
         new_password = x.validate_user_password(data.get("new_user_password", ""))
     except Exception as ex:
-        ic(ex)          
-        return jsonify({"message": "Ugyldige oplysninger"}), 400
+        ic(ex)
+        if "company_exception user_password" in str(ex):
+            return jsonify({"status": "error", "message": f"Adgangskoden skal være {x.USER_PASSWORD_MIN}–{x.USER_PASSWORD_MAX} tegn"}), 400
+        return jsonify({"status": "error", "message": "Linket er ugyldigt eller udløbet"}), 400
 
     db, cursor = x.db()
     try:
-        cursor.execute("SELECT user_id FROM users WHERE reset_token = %s", (token,))
-        user = cursor.fetchone()
-
-        if not user:
-            return jsonify({"message": "Linket er ugyldigt eller udløbet"}), 400
-
         password_hash = generate_password_hash(new_password)
         cursor.execute(
-            "UPDATE users SET user_password_hash = %s, reset_token = NULL WHERE user_id = %s",
-            (password_hash, user["user_id"]),
+            "UPDATE users SET user_password_hash = %s, reset_token = NULL WHERE reset_token = %s",
+            (password_hash, token),
         )
+        # "Hey database, set this new password on the user with this token, and use up the token"
         db.commit()
 
-        return jsonify({"message": "Adgangskode nulstillet"}), 200
+        if cursor.rowcount == 0:
+            return jsonify({"status": "error", "message": "Linket er ugyldigt eller udløbet"}), 400
+
+        return jsonify({"status": "ok", "message": "Adgangskode nulstillet"}), 200
 
     except Exception as ex:
         ic(ex)
-        return jsonify({"message": "Kunne ikke nulstille adgangskode"}), 500
+        return jsonify({"status": "error", "message": "Kunne ikke nulstille adgangskode"}), 500
 
     finally:
         cursor.close()
@@ -200,26 +206,19 @@ def reset_password():
 @app.post("/api-login")
 def login():
     data = request.get_json(silent=True) or {}
-    # request.get_json(...)  → "Hey request, give me your body as JSON"
-    # silent=True            → if the body isn't JSON, don't crash, return None instead
-    # or {}                  → if the result is None, use an empty dictionary
-    # data                   → always a dictionary now, never None
 
     email = str(data.get("user_email", "")).strip()
-    # data.get("user_email", "") → "Hey data, give me user_email, or "" if it's missing"
-    # str(...)                   → make sure it's text, even if someone sent a number
-    # .strip()                   → remove spaces from both ends: " a@b.dk " → "a@b.dk"
-    # email                      → same name as before, so the rest of the code uses the clean value
+ 
     password = data.get("user_password", "")
 
 # ── 2. BACKEND LOGIC: check the input (inside the backend box) ───────
     if not email or not password:
-        return jsonify({"message": "Email og adgangskode skal udfyldes"}), 400
+        return jsonify({"status": "error", "message": "Email og adgangskode skal udfyldes"}), 400
     try:                                                # NEW: check the rules
         email = x.validate_email(email)
         password = x.validate_user_password(password)
     except Exception:
-        return jsonify({"message": "Ugyldig email eller adgangskode"}), 400
+        return jsonify({"status": "error", "message": "Ugyldig email eller adgangskode"}), 400
 
 # ── 3. SQL QUERY (arrow: backend → database) ─────────────────────────
     db, cursor = x.db()                                 # only now: ask the database
@@ -229,14 +228,15 @@ def login():
         user = cursor.fetchone()
 # ── 5. BACKEND LOGIC: decide the answer (inside the backend box) ─────
         if not user or not check_password_hash(user["user_password_hash"], password):
-            return jsonify({"message": "Forkert email eller adgangskode"}), 401
+            return jsonify({"status": "error", "message": "Forkert email eller adgangskode"}), 401
 
         if not user["verified_at"]:
-            return jsonify({"message": "Bekræft venligst din email før du kan logge ind"}), 403
+            return jsonify({"status": "error", "message": "Bekræft venligst din email før du kan logge ind"}), 403
 
         access_token = create_access_token(identity=str(user["user_id"]))
 # ── 6. JSON RESPONSE (arrow: backend → frontend) ─────────────────────
         return jsonify({
+            "status": "ok",
             "access_token": access_token,
             "user": {
                 "user_id": user["user_id"],
@@ -250,7 +250,7 @@ def login():
 # ── 7. SAFETY NET AND CLEANUP (backend only) ─────────────────────────
     except Exception as ex:
         ic(ex)
-        return jsonify({"message": "Login fejlede"}), 500
+        return jsonify({"status": "error", "message": "Login fejlede"}), 500
 
     finally:
         cursor.close()
@@ -277,13 +277,13 @@ def get_my_info():
         user = cursor.fetchone()
 
         if not user:
-            return jsonify({"message": "Bruger ikke fundet"}), 404
+            return jsonify({"status": "error", "message": "Bruger ikke fundet"}), 404
 
-        return jsonify({"user": user}), 200
+        return jsonify({"status": "ok", "user": user}), 200
 
     except Exception as ex:
         ic(ex)
-        return jsonify({"message": "Kunne ikke hente bruger"}), 500
+        return jsonify({"status": "error", "message": "Kunne ikke hente bruger"}), 500
 
     finally:
         cursor.close()
@@ -302,7 +302,7 @@ def update_my_info():
     membership_tier = data.get("membership_tier")
 
     if name is None and license_plate is None and membership_tier is None and phone is None:
-        return jsonify({"message": "Intet at opdatere"}), 400
+        return jsonify({"status": "error", "message": "Intet at opdatere"}), 400
 
     try:                                             # validate only what was sent
         if name is not None:
@@ -317,10 +317,19 @@ def update_my_info():
                 raise Exception("company_exception membership_tier")
     except Exception as ex:
         ic(ex)
-        return jsonify({"message": "Ugyldige oplysninger"}), 400
+        if "company_exception user_name" in str(ex):
+            return jsonify({"status": "error", "message": f"Navn skal være {x.USER_NAME_MIN}–{x.USER_NAME_MAX} tegn"}), 400
+        if "company_exception user_phone" in str(ex):
+            return jsonify({"status": "error", "message": "Ugyldigt telefonnummer"}), 400
+        if "company_exception license_plate" in str(ex):
+            return jsonify({"status": "error", "message": f"Nummerpladen skal være {x.LICENSE_PLATE_MIN}–{x.LICENSE_PLATE_MAX} tegn"}), 400
+        if "company_exception membership_tier" in str(ex):
+            return jsonify({"status": "error", "message": "Ugyldigt medlemskab"}), 400
+        return jsonify({"status": "error", "message": "Ugyldige oplysninger"}), 400
 
     db, cursor = x.db()
     try:
+        db.start_transaction()                       # 2 or more updates: all or nothing
         if name is not None:
             cursor.execute("UPDATE users SET user_name = %s WHERE user_id = %s", (name, user_id))
         if phone is not None:                                      
@@ -331,11 +340,12 @@ def update_my_info():
             cursor.execute("UPDATE users SET membership_tier = %s WHERE user_id = %s", (membership_tier, user_id))
         db.commit()                                  # save all changes at once
 
-        return jsonify({"message": "Oplysninger opdateret"}), 200
+        return jsonify({"status": "ok", "message": "Oplysninger opdateret"}), 200
 
     except Exception as ex:
         ic(ex)
-        return jsonify({"message": "Kunne ikke opdatere oplysninger"}), 500
+        db.rollback()                                # undo everything if anything failed
+        return jsonify({"status": "error", "message": "Kunne ikke opdatere oplysninger"}), 500
 
     finally:
         cursor.close()
@@ -359,15 +369,15 @@ def delete_account():
 
         if cursor.rowcount == 0:                                 # no user was deleted
             db.rollback()
-            return jsonify({"message": "Bruger ikke fundet"}), 404
+            return jsonify({"status": "error", "message": "Bruger ikke fundet"}), 404
 
         db.commit()                                              # both deletes are saved together
-        return jsonify({"message": "Konto slettet"}), 200
+        return jsonify({"status": "ok", "message": "Konto slettet"}), 200
 
     except Exception as ex:
         ic(ex)
         db.rollback()                                            # undo everything if anything failed
-        return jsonify({"message": "Kunne ikke slette konto"}), 500
+        return jsonify({"status": "error", "message": "Kunne ikke slette konto"}), 500
 
     finally:
         cursor.close()
@@ -381,11 +391,11 @@ def get_wash_halls():
     try:
         cursor.execute("SELECT hall_id, name, address FROM wash_halls")
         wash_halls = cursor.fetchall()
-        return jsonify({"wash_halls": wash_halls}), 200
+        return jsonify({"status": "ok", "wash_halls": wash_halls}), 200
 
     except Exception as ex:
         ic(ex)
-        return jsonify({"message": "Kunne ikke hente vaskehaller"}), 500
+        return jsonify({"status": "error", "message": "Kunne ikke hente vaskehaller"}), 500
 
     finally:
         cursor.close()
@@ -405,13 +415,13 @@ def start_wash():
             raise Exception("company_exception tier")
     except Exception as ex:
         ic(ex)
-        return jsonify({"message": "Ugyldige oplysninger"}), 400
+        return jsonify({"status": "error", "message": "Ugyldige oplysninger"}), 400
 
     db, cursor = x.db()
     try:
         cursor.execute("SELECT hall_id FROM wash_halls WHERE hall_id = %s", (hall_id,))
         if not cursor.fetchone():
-            return jsonify({"message": "Vaskehal ikke fundet"}), 404
+            return jsonify({"status": "error", "message": "Vaskehal ikke fundet"}), 404
 
         wash_id = uuid.uuid4().hex
         cursor.execute(
@@ -419,11 +429,11 @@ def start_wash():
             (wash_id, user_id, hall_id, tier),
         )
         db.commit()
-        return jsonify({"wash_id": wash_id}), 201
+        return jsonify({"status": "ok", "wash_id": wash_id}), 201
 
     except Exception as ex:
         ic(ex)
-        return jsonify({"message": "Kunne ikke starte vask"}), 500
+        return jsonify({"status": "error", "message": "Kunne ikke starte vask"}), 500
 
     finally:
         cursor.close()
@@ -450,11 +460,11 @@ def get_my_wash_history():
         )
         # "Hey database, give me this user's washes, with the name of the hall, newest first"
         washes = cursor.fetchall()
-        return jsonify({"washes": washes}), 200
+        return jsonify({"status": "ok", "washes": washes}), 200
 
     except Exception as ex:
         ic(ex)
-        return jsonify({"message": "Kunne ikke hente vaskehistorik"}), 500
+        return jsonify({"status": "error", "message": "Kunne ikke hente vaskehistorik"}), 500
 
     finally:
         cursor.close()
@@ -476,21 +486,8 @@ def rate_wash():
             raise Exception("company_exception rating")
     except Exception as ex:
         ic(ex)
-        return jsonify({"message": "Ugyldige oplysninger"}), 400
+        return jsonify({"status": "error", "message": "Ugyldige oplysninger"}), 400
 
-    # db, cursor = x.db()
-    # try:
-    #     cursor.execute(
-    #         "UPDATE washes SET rating = %s WHERE wash_id = %s AND user_id = %s",
-    #         (rating, wash_id, user_id),
-    #     )
-    #     # "Hey database, set this rating on this wash, but only if it belongs to this user"
-    #     db.commit()
-
-    #     if cursor.rowcount == 0:
-    #         return jsonify({"message": "Vask ikke fundet"}), 404
-
-    #     return jsonify({"message": "Bedømmelse gemt"}), 200
     db, cursor = x.db()
     try:
         cursor.execute(
@@ -499,15 +496,15 @@ def rate_wash():
         )
         # "Hey database, does this wash exist, and does it belong to this user?"
         if not cursor.fetchone():
-            return jsonify({"message": "Vask ikke fundet"}), 404
+            return jsonify({"status": "error", "message": "Vask ikke fundet"}), 404
 
         cursor.execute("UPDATE washes SET rating = %s WHERE wash_id = %s", (rating, wash_id))
         db.commit()
-        return jsonify({"message": "Bedømmelse gemt"}), 200
+        return jsonify({"status": "ok", "message": "Bedømmelse gemt"}), 200
 
     except Exception as ex:
         ic(ex)
-        return jsonify({"message": "Kunne ikke gemme bedømmelse"}), 500
+        return jsonify({"status": "error", "message": "Kunne ikke gemme bedømmelse"}), 500
 
     finally:
         cursor.close()

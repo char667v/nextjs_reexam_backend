@@ -123,7 +123,9 @@ def send_email(receiver_email, html, subject="Wash World"):
         pass
 
 ############# LICENSE PLATE VALIDATION ##################
-REGEX_LICENSE_PLATE = "^[A-Z0-9 ]{2,10}$"
+LICENSE_PLATE_MIN = 2
+LICENSE_PLATE_MAX = 10
+REGEX_LICENSE_PLATE = f"^[A-Z0-9 ]{{{LICENSE_PLATE_MIN},{LICENSE_PLATE_MAX}}}$"
 def validate_license_plate(license_plate):
     license_plate = license_plate.strip().upper()    # " ab12345 " → "AB12345"
     if not re.match(REGEX_LICENSE_PLATE, license_plate):
