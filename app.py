@@ -12,6 +12,8 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
+from datetime import timedelta
+
 import x                                  
 from icecream import ic
 ic.configureOutput(prefix=f"_____ | ", includeContext=True)
@@ -21,6 +23,8 @@ CORS(app)# allows everything
 # app.config['SESSION_TYPE'] = 'filesystem'
 # Session(app)
 app.config["JWT_SECRET_KEY"] = os.environ.get("JWT_SECRET_KEY", "dev-secret-change-me")
+# app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=1)
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=20) # NEW: shorter expiration for testing
 jwt = JWTManager(app)
 
 ########################### api-signup ###########################
