@@ -21,7 +21,7 @@ app = Flask(__name__)
 CORS(app)# allows everything
 # app.config['SESSION_TYPE'] = 'filesystem'
 # Session(app)
-app.config["JWT_SECRET_KEY"] = os.environ.get("JWT_SECRET_KEY", "dev-secret-change-me")
+app.config["JWT_SECRET_KEY"] = os.environ["JWT_SECRET_KEY"]
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=20)
 jwt = JWTManager(app)
 
