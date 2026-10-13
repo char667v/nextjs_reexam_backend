@@ -26,12 +26,12 @@ app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=20)
 jwt = JWTManager(app)
 
 ########################### health check ###########################
-@app.get("/")
+@app.get("/") # how Flask reads its own code: the route is "/" and the method is GET 
 def index():
     return jsonify({"status": "ok", "message": "Connected and running"}), 200
-# visible in the browser at http://localhost:80
+           # visible in the browser at http://localhost:80
 
-########################### api-signup ###########################
+########################### api-signup route###########################
 @app.post("/api-signup")
 def signup():
     try:
@@ -98,7 +98,7 @@ def signup():
         cursor.close()
         db.close()
 
-######################### api-verify-email ###########################
+######################### api-verify-email route ###########################
 @app.get("/api-verify-email")
 def verify_email():
     try:

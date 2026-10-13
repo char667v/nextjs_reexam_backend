@@ -1,5 +1,5 @@
 from flask import request, make_response
-import mysql.connector
+import mysql.connector # library that connects Flask to MariaDB
 import re 
 from datetime import datetime
 from functools import wraps
@@ -13,17 +13,17 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
-##############################
+############ Function that connects Flask to MariaDB ##################
 def db():
     try:
         db = mysql.connector.connect(
-            host="mariadb",
+            host="mariadb", # Flask finds MariaDB by its service name on the network: nextjs_test_backend_default 
             user="root",
-            password=os.environ.get("DB_PASSWORD", "password"), # why is it written like this?
+            password=os.environ.get("DB_PASSWORD", "password"), # why is it written like this - to keep the real password out of the code
             database="ww_reeksamen"
         )
-        cursor = db.cursor(dictionary=True)
-        return db, cursor
+        cursor = db.cursor(dictionary=True) # Creates the order slip with rows returned as dictionaries instead of tuples
+        return db, cursor                   # Hands back the database connection and the order slip to the route in app.py 
     except Exception as e:
         print(e, flush=True)
         raise Exception("Database under maintenance", 500)
