@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, jsonify 
-import uuid
-import x
+import uuid 
+import x # x is a custom module that contains utility functions for validation, database connection, and email sending.
 import os
 import time
 from datetime import timedelta
@@ -12,8 +12,7 @@ from flask_cors import CORS
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-
-import x                                  
+                                 
 from icecream import ic
 ic.configureOutput(prefix=f"_____ | ", includeContext=True)
 
