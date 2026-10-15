@@ -23,17 +23,29 @@ from email.mime.text import MIMEText                           # MIMEText: the e
 def db():
     try:
         db = mysql.connector.connect(
-            host="mariadb", # Flask finds MariaDB by its service name on the network: nextjs_test_backend_default 
+            host="mariadb",                                     # Flask finds MariaDB by its service name on the network: nextjs_test_backend_default 
             user="root",
             password=os.environ.get("DB_PASSWORD", "password"), # why is it written like this - to keep the real password out of the code
             database="ww_reeksamen"
         )
-        cursor = db.cursor(dictionary=True) # Creates the order slip with rows returned as dictionaries instead of tuples
-        return db, cursor                   # Hands back the database connection and the order slip to the route in app.py 
+        cursor = db.cursor(dictionary=True)                     # Creates the order slip with rows returned as dictionaries instead of tuples
+        return db, cursor                                       # Hands back the database connection and the order slip to the route in app.py 
     except Exception as e:
         print(e, flush=True)
         raise Exception("Database under maintenance", 500)
 
+
+############### NO_CACHE #####################
+# function - runs only if and when you call it
+def no_cache(view):
+    @wraps(view)
+    def no_cache_view(*args, **kwargs):
+        response = make_response(view(*args, **kwargs))
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
+    return no_cache_view
 
 ############### RULES (VALIDATION): #####################
 ############# USER_NAME VALIDATION RULE #################

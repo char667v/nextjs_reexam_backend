@@ -1,15 +1,15 @@
 services:
   web: # Flask app/ my BACEND with Flask “instruction book” framework 
-    build:
-      context: .
+    build: # because we are building our own image (not using a pre-made one) like with mariadb and phpmyadmin
+      context: . # the root of the project (where the Dockerfile is located)
       dockerfile: Dockerfile
     container_name: ww_reeksamen_flask
-    depends_on:
+    depends_on: # start the mariadb before the Flask app starts
       - mariadb
     ports:
       - 80:80
     volumes:
-      - .:/app
+      - .:/app # my backend folder on the Mac (.) and /app in the Flask container are the same files, so code changes show up without rebuilding
     env_file:
       - .env
  
@@ -37,3 +37,7 @@ services:
  
 volumes:
   mariadb_data:
+
+
+
+

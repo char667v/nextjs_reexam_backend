@@ -134,7 +134,7 @@ def verify_email():
 
     finally:
         if "cursor" in locals(): cursor.close()
-        db.close()
+        if "db" in locals(): db.close()
 
 ###################### api-forgot-password ############################
 @app.post("/api-forgot-password")
