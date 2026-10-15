@@ -25,7 +25,7 @@ def db():
         db = mysql.connector.connect(
             host="mariadb",                                     # Flask finds MariaDB by its service name on the network: nextjs_test_backend_default 
             user="root",
-            password=os.environ.get("DB_PASSWORD", "password"), # why is it written like this - to keep the real password out of the code
+            password="password",
             database="ww_reeksamen"
         )
         cursor = db.cursor(dictionary=True)                     # Creates the order slip with rows returned as dictionaries instead of tuples

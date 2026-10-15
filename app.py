@@ -5,7 +5,7 @@ import x                                                       # x is the toobox
 import os                                                      # let's python talk to the operating system (your mac): file paths, folders, environment variables
 import time                                                    # NOT used in app.py
 from datetime import timedelta                                 # get and format dates/times
-from flask_session import Session                              # NOT used anymore: only used in the commented-out session lines below (replaced by JWT)
+# from flask_session import Session                            # NOT used anymore: only used in the commented-out session lines below (replaced by JWT)
 from werkzeug.security import generate_password_hash, check_password_hash 
                                                                # generate_password_hash = turns the password into a scrambled hash before saving it (signup + reset password),
                                                                # check_password_hash = checks if a typed password matches the saved hash (login). The real password is never saved
