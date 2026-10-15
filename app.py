@@ -36,9 +36,22 @@ jwt = JWTManager(app)                                          # turn JWT login 
 ########################### health check ###########################
 @app.get("/") # how Flask reads its own code: the route is "/" and the method is GET 
 def index():
-    return jsonify({"status": "ok", "message": "Connected and running"}), 200
-           # visible in the browser at http://localhost:80
+    try:
+        db, cursor = x.db()
 
+        return jsonify({"status": "ok", "message": "API and database are running"}), 200
+        # visible in the browser at http://localhost:80
+
+    except Exception as ex:
+        ic(ex)
+        return jsonify({"status": "error", "message": "Database is not reachable"}), 500
+
+    finally:
+        if "cursor" in locals(): cursor.close()
+        if "db" in locals(): db.close()
+
+
+####################         API ROUTES       #########################
 ########################### api-signup route###########################
 @app.post("/api-signup")
 def signup():
