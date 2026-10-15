@@ -222,7 +222,6 @@ def reset_password():
         if "db" in locals(): db.close()
 
 ############################# api-login ##############################
-# ── 1. HTTP REQUEST ARRIVES (arrow: frontend → backend) ──────────────
 @app.post("/api-login")
 def login():
     data = request.get_json(silent=True) or {}
@@ -279,15 +278,15 @@ def login():
 @app.get("/api-my-info")
 @jwt_required()
 def get_my_info():
-
     user_id = get_jwt_identity()
 
     try:
         db, cursor = x.db()
         cursor.execute(
-        "SELECT user_id, user_name, user_email, license_plate, user_phone, membership_tier FROM users WHERE user_id = %s",
+            "SELECT user_name, user_email, license_plate, user_phone, membership_tier FROM users WHERE user_id = %s",
             (user_id,),
         )
+        # "Hey database, give me this user's details"
         user = cursor.fetchone()
 
         if not user:
