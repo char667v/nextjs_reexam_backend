@@ -232,14 +232,14 @@ def login():
 
     if not email or not password:
         return jsonify({"status": "error", "message": "Email og adgangskode skal udfyldes"}), 400
-    try:                                                # NEW: check the rules
+    try:                                               
         email = x.validate_email(email)
         password = x.validate_user_password(password)
     except Exception:
         return jsonify({"status": "error", "message": "Ugyldig email eller adgangskode"}), 400
 
     try:
-        db, cursor = x.db()                                 # only now: ask the database
+        db, cursor = x.db()                                
         cursor.execute("SELECT * FROM users WHERE user_email = %s", (email,))
         user = cursor.fetchone()
         if not user or not check_password_hash(user["user_password_hash"], password):
@@ -252,13 +252,13 @@ def login():
         return jsonify({
             "status": "ok",
             "access_token": access_token,
-            "user": {
-                "user_id": user["user_id"],
-                "user_name": user["user_name"],
-                "user_email": user["user_email"],
-                "license_plate": user["license_plate"],
-                "membership_tier": user["membership_tier"],
-            },
+            # "user": {
+            #     "user_id": user["user_id"],
+            #     "user_name": user["user_name"],
+            #     "user_email": user["user_email"],
+            #     "license_plate": user["license_plate"],
+            #     "membership_tier": user["membership_tier"],
+            # },
         }), 200
 
     except Exception as ex:
