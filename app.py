@@ -252,13 +252,6 @@ def login():
         return jsonify({
             "status": "ok",
             "access_token": access_token,
-            # "user": {
-            #     "user_id": user["user_id"],
-            #     "user_name": user["user_name"],
-            #     "user_email": user["user_email"],
-            #     "license_plate": user["license_plate"],
-            #     "membership_tier": user["membership_tier"],
-            # },
         }), 200
 
     except Exception as ex:
