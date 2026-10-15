@@ -60,8 +60,7 @@ def signup():
         name = x.validate_user_name(data.get("user_name", ""))
         email = x.validate_email(data.get("user_email", ""))
         password = x.validate_user_password(data.get("user_password", ""))
-        # license_plate = data.get("license_plate", "")                                ← OLD: no validation (inactive)
-        license_plate = x.validate_license_plate(str(data.get("license_plate", "")))  # wrapping it in a validator   ← NEW: validated (active)
+        license_plate = x.validate_license_plate(str(data.get("license_plate", "")))  # validated with the rule from x.py
         phone = data.get("user_phone")
         if phone:
             phone = x.validate_user_phone(str(phone))
@@ -344,7 +343,6 @@ def update_my_info():
 
     try:
         db, cursor = x.db()
-        db.start_transaction()                       # 2 or more updates: all or nothing
         if name is not None:
             cursor.execute("UPDATE users SET user_name = %s WHERE user_id = %s", (name, user_id))
         if phone is not None:                                      
@@ -374,7 +372,6 @@ def delete_account():
 
     try:
         db, cursor = x.db()
-        db.start_transaction()                                   # start: "all or nothing"
 
         cursor.execute("DELETE FROM washes WHERE user_id = %s", (user_id,))
         # "Hey database, delete this user's washes" (first, because of the foreign key)
