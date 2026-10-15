@@ -1,29 +1,38 @@
-from flask import Flask, render_template, request, jsonify 
-import uuid 
-import x # x is a custom module that contains utility functions for validation, database connection, and email sending.
-import os
-import time
-from datetime import timedelta
-from flask_session import Session
-from werkzeug.security import generate_password_hash, check_password_hash
+from flask import Flask, render_template, request, jsonify     # Flask = the app, render_template = fills the email HTML templates, request = data the frontend sent, 
+                                                               # jsonify = turns a dictionary into JSON for the frontend
+import uuid                                                    # generate unique random IDs
+import x                                                       # x is the toobox with all the functions and rules we wrote in x.py
+import os                                                      # let's python talk to the operating system (your mac): file paths, folders, environment variables
+import time                                                    # NOT used in app.py
+from datetime import timedelta                                 # get and format dates/times
+from flask_session import Session                              # NOT used anymore: only used in the commented-out session lines below (replaced by JWT)
+from werkzeug.security import generate_password_hash, check_password_hash 
+                                                               # generate_password_hash = turns the password into a scrambled hash before saving it (signup + reset password),
+                                                               # check_password_hash = checks if a typed password matches the saved hash (login). The real password is never saved
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
+                                                               # JWTManager = turns JWT on, create_access_token = makes the login token,
+                                                               # jwt_required = route needs a valid token, get_jwt_identity = which user the token belongs to
 
-from flask_cors import CORS
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+from flask_cors import CORS                                    # lets the frontend (localhost:3000) call the backend (localhost:80)
+import smtplib                                                 # smtplib: connects to a mail server
+from email.mime.multipart import MIMEMultipart                 # MIMEMultipart: an empty email “envelope”
+from email.mime.text import MIMEText                           # MIMEText: the email’s content
                                  
-from icecream import ic
-ic.configureOutput(prefix=f"_____ | ", includeContext=True)
+from icecream import ic                                        # Debugging tool that shows the name and the value.
+                                                               # from icecream means “go to the package called icecream”.
+                                                               # import ic means “bring me only the tool called ic”.
+ic.configureOutput(prefix=f"_____ | ", includeContext=True)    # sets how ic() text looks in the terminal: starts with "_____ | " and shows file + line
 
-app = Flask(__name__)
-CORS(app)# allows everything
-# app.config['SESSION_TYPE'] = 'filesystem'
+app = Flask(__name__)                                          # create the Flask app (the backend)
+CORS(app)                                                      # allows everything: any website may call this backend
+# app.config['SESSION_TYPE'] = 'filesystem'                    # old login system (sessions), replaced by JWT
 # Session(app)
-app.config["JWT_SECRET_KEY"] = os.environ["JWT_SECRET_KEY"]
-app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=20)
-jwt = JWTManager(app)
+app.config["JWT_SECRET_KEY"] = os.environ["JWT_SECRET_KEY"]    # the secret key used to sign login tokens, read from .env (so it's not written in the code)
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=20) # a login token stops working after 20 minutes
+jwt = JWTManager(app)                                          # turn JWT login on for the app
 
+
+#######################################################################################
 ########################### health check ###########################
 @app.get("/") # how Flask reads its own code: the route is "/" and the method is GET 
 def index():
@@ -65,8 +74,8 @@ def signup():
             return jsonify({"status": "error", "message": "Ugyldigt medlemskab"}), 400
         return jsonify({"status": "error", "message": "Ugyldige oplysninger"}), 400
 
-    db, cursor = x.db()
     try:
+        db, cursor = x.db()
         cursor.execute("SELECT user_id, user_name FROM users WHERE user_email = %s", (email,))
         if cursor.fetchone():
             return jsonify({"status": "error", "message": "Email er allerede i brug"}), 409
@@ -94,8 +103,8 @@ def signup():
         return jsonify({"status": "error", "message": "Kunne ikke oprette bruger"}), 500
 
     finally:
-        cursor.close()
-        db.close()
+        if "cursor" in locals(): cursor.close()
+        if "db" in locals(): db.close()
 
 ######################### api-verify-email route ###########################
 @app.get("/api-verify-email")
@@ -105,8 +114,8 @@ def verify_email():
     except Exception:
         return jsonify({"status": "error", "message": "Ugyldigt bekræftelseslink"}), 400
 
-    db, cursor = x.db()
     try:
+        db, cursor = x.db()
         cursor.execute(
             "UPDATE users SET verified_at = NOW() WHERE verification_key = %s AND verified_at IS NULL",
             (key,),
@@ -124,7 +133,7 @@ def verify_email():
         return jsonify({"status": "error", "message": "Noget gik galt"}), 500
 
     finally:
-        cursor.close()
+        if "cursor" in locals(): cursor.close()
         db.close()
 
 ###################### api-forgot-password ############################
@@ -136,8 +145,8 @@ def forgot_password():
     except Exception:
         return jsonify({"status": "error", "message": "Ugyldig email"}), 400
 
-    db, cursor = x.db()
     try:
+        db, cursor = x.db()
         cursor.execute("SELECT user_id, user_name FROM users WHERE user_email = %s", (email,))
         user = cursor.fetchone()
 
@@ -160,8 +169,8 @@ def forgot_password():
         return jsonify({"status": "error", "message": "Noget gik galt"}), 500
 
     finally:
-        cursor.close()
-        db.close()
+        if "cursor" in locals(): cursor.close()
+        if "db" in locals(): db.close()
 
 ###################### api-reset-password ############################
 
@@ -177,8 +186,8 @@ def reset_password():
             return jsonify({"status": "error", "message": f"Adgangskoden skal være {x.USER_PASSWORD_MIN}–{x.USER_PASSWORD_MAX} tegn"}), 400
         return jsonify({"status": "error", "message": "Linket er ugyldigt eller udløbet"}), 400
 
-    db, cursor = x.db()
-    try:
+    try:    
+        db, cursor = x.db()
         password_hash = generate_password_hash(new_password)
         cursor.execute(
             "UPDATE users SET user_password_hash = %s, reset_token = NULL WHERE reset_token = %s",
@@ -197,8 +206,8 @@ def reset_password():
         return jsonify({"status": "error", "message": "Kunne ikke nulstille adgangskode"}), 500
 
     finally:
-        cursor.close()
-        db.close()
+        if "cursor" in locals(): cursor.close()
+        if "db" in locals(): db.close()
 
 ############################# api-login ##############################
 # ── 1. HTTP REQUEST ARRIVES (arrow: frontend → backend) ──────────────
@@ -210,7 +219,6 @@ def login():
  
     password = data.get("user_password", "")
 
-# ── 2. BACKEND LOGIC: check the input (inside the backend box) ───────
     if not email or not password:
         return jsonify({"status": "error", "message": "Email og adgangskode skal udfyldes"}), 400
     try:                                                # NEW: check the rules
@@ -219,13 +227,10 @@ def login():
     except Exception:
         return jsonify({"status": "error", "message": "Ugyldig email eller adgangskode"}), 400
 
-# ── 3. SQL QUERY (arrow: backend → database) ─────────────────────────
-    db, cursor = x.db()                                 # only now: ask the database
     try:
+        db, cursor = x.db()                                 # only now: ask the database
         cursor.execute("SELECT * FROM users WHERE user_email = %s", (email,))
-# ── 4. ROWS BACK (arrow: database → backend) ─────────────────────────
         user = cursor.fetchone()
-# ── 5. BACKEND LOGIC: decide the answer (inside the backend box) ─────
         if not user or not check_password_hash(user["user_password_hash"], password):
             return jsonify({"status": "error", "message": "Forkert email eller adgangskode"}), 401
 
@@ -233,7 +238,6 @@ def login():
             return jsonify({"status": "error", "message": "Bekræft venligst din email før du kan logge ind"}), 403
 
         access_token = create_access_token(identity=str(user["user_id"]))
-# ── 6. JSON RESPONSE (arrow: backend → frontend) ─────────────────────
         return jsonify({
             "status": "ok",
             "access_token": access_token,
@@ -246,14 +250,13 @@ def login():
             },
         }), 200
 
-# ── 7. SAFETY NET AND CLEANUP (backend only) ─────────────────────────
     except Exception as ex:
         ic(ex)
         return jsonify({"status": "error", "message": "Login fejlede"}), 500
 
     finally:
-        cursor.close()
-        db.close()
+        if "cursor" in locals(): cursor.close()
+        if "db" in locals(): db.close()
 
 
 ###################### api-my-info ############################
@@ -267,8 +270,8 @@ def get_my_info():
 
     user_id = get_jwt_identity()
 
-    db, cursor = x.db()
     try:
+        db, cursor = x.db()
         cursor.execute(
         "SELECT user_id, user_name, user_email, license_plate, user_phone, membership_tier FROM users WHERE user_id = %s",
             (user_id,),
@@ -285,8 +288,8 @@ def get_my_info():
         return jsonify({"status": "error", "message": "Kunne ikke hente bruger"}), 500
 
     finally:
-        cursor.close()
-        db.close()
+        if "cursor" in locals(): cursor.close()
+        if "db" in locals(): db.close()
 
 ######################### api-update-my-info #########################
 @app.patch("/api-update-my-info")
@@ -326,8 +329,8 @@ def update_my_info():
             return jsonify({"status": "error", "message": "Ugyldigt medlemskab"}), 400
         return jsonify({"status": "error", "message": "Ugyldige oplysninger"}), 400
 
-    db, cursor = x.db()
     try:
+        db, cursor = x.db()
         db.start_transaction()                       # 2 or more updates: all or nothing
         if name is not None:
             cursor.execute("UPDATE users SET user_name = %s WHERE user_id = %s", (name, user_id))
@@ -343,12 +346,12 @@ def update_my_info():
 
     except Exception as ex:
         ic(ex)
-        db.rollback()                                # undo everything if anything failed
+        if "db" in locals(): db.rollback()                  # undo everything if anything failed
         return jsonify({"status": "error", "message": "Kunne ikke opdatere oplysninger"}), 500
 
     finally:
-        cursor.close()
-        db.close()
+        if "cursor" in locals(): cursor.close()
+        if "db" in locals(): db.close()
 
 ######################## api-delete-account ##########################
 @app.delete("/api-delete-account")
@@ -356,8 +359,8 @@ def update_my_info():
 def delete_account():
     user_id = get_jwt_identity()
 
-    db, cursor = x.db()
     try:
+        db, cursor = x.db()
         db.start_transaction()                                   # start: "all or nothing"
 
         cursor.execute("DELETE FROM washes WHERE user_id = %s", (user_id,))
@@ -375,19 +378,19 @@ def delete_account():
 
     except Exception as ex:
         ic(ex)
-        db.rollback()                                            # undo everything if anything failed
+        if "db" in locals(): db.rollback()                  # undo everything if anything failed
         return jsonify({"status": "error", "message": "Kunne ikke slette konto"}), 500
 
     finally:
-        cursor.close()
-        db.close()
+        if "cursor" in locals(): cursor.close()
+        if "db" in locals(): db.close()
 
 ####################          WASH          ##########################
 ############################ api-wash-halls ##########################
 @app.get("/api-wash-halls")
 def get_wash_halls():
-    db, cursor = x.db()
     try:
+        db, cursor = x.db()
         cursor.execute("SELECT hall_id, name, address FROM wash_halls")
         wash_halls = cursor.fetchall()
         return jsonify({"status": "ok", "wash_halls": wash_halls}), 200
@@ -397,8 +400,8 @@ def get_wash_halls():
         return jsonify({"status": "error", "message": "Kunne ikke hente vaskehaller"}), 500
 
     finally:
-        cursor.close()
-        db.close()
+        if "cursor" in locals(): cursor.close()
+        if "db" in locals(): db.close()
 
 ############################ api-start-wash ##########################
 @app.post("/api-start-wash")
@@ -416,8 +419,8 @@ def start_wash():
         ic(ex)
         return jsonify({"status": "error", "message": "Ugyldige oplysninger"}), 400
 
-    db, cursor = x.db()
     try:
+        db, cursor = x.db()
         cursor.execute("SELECT hall_id FROM wash_halls WHERE hall_id = %s", (hall_id,))
         if not cursor.fetchone():
             return jsonify({"status": "error", "message": "Vaskehal ikke fundet"}), 404
@@ -435,8 +438,8 @@ def start_wash():
         return jsonify({"status": "error", "message": "Kunne ikke starte vask"}), 500
 
     finally:
-        cursor.close()
-        db.close()
+        if "cursor" in locals(): cursor.close()
+        if "db" in locals(): db.close()
 
 ######################### api-my-wash-history ########################
 @app.get("/api-my-wash-history")
@@ -444,10 +447,9 @@ def start_wash():
 def get_my_wash_history():
     user_id = get_jwt_identity()
 
-    db, cursor = x.db()
     try:
+        db, cursor = x.db()
         cursor.execute(
-            # SELECT washes.wash_id, washes.tier, washes.washed_at, wash_halls.name AS hall_name
             """
             SELECT washes.wash_id, washes.tier, washes.washed_at, washes.rating, wash_halls.name AS hall_name
             FROM washes
@@ -466,8 +468,8 @@ def get_my_wash_history():
         return jsonify({"status": "error", "message": "Kunne ikke hente vaskehistorik"}), 500
 
     finally:
-        cursor.close()
-        db.close()
+        if "cursor" in locals(): cursor.close()
+        if "db" in locals(): db.close()
 
 ####################       WASH RATING      ##########################
 ############################ api-rate-wash ###########################
@@ -487,8 +489,8 @@ def rate_wash():
         ic(ex)
         return jsonify({"status": "error", "message": "Ugyldige oplysninger"}), 400
 
-    db, cursor = x.db()
     try:
+        db, cursor = x.db()
         cursor.execute(
             "SELECT wash_id FROM washes WHERE wash_id = %s AND user_id = %s",
             (wash_id, user_id),
@@ -506,5 +508,5 @@ def rate_wash():
         return jsonify({"status": "error", "message": "Kunne ikke gemme bedømmelse"}), 500
 
     finally:
-        cursor.close()
-        db.close()
+        if "cursor" in locals(): cursor.close()
+        if "db" in locals(): db.close()
