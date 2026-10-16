@@ -3,4 +3,5 @@ __pycache__/
 *$py.class
 flask_session/
 .env
-venv/ #venv is short for virtual environment. That’s the private Python folder for this project, the “storage room”.
+venv/ 
+# venv is short for virtual environment. That’s the private Python folder for this project, the “storage room”.
