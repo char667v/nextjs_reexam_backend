@@ -35,4 +35,5 @@ INSERT INTO wash_halls (hall_id, name, address) VALUES
   ('33333333333333333333333333333333', 'Wash World Ballerup', 'Industriparken 6, 2750 Ballerup'),
   ('44444444444444444444444444444444', 'Wash World Taastrup', 'Roskildevej 376, 2630 Taastrup'),
   ('55555555555555555555555555555555', 'Wash World Ishøj', 'Vejleåvej 19, 2635 Ishøj'),
-  ('66666666666666666666666666666666', 'Wash World Brøndby Strand', 'Gammel Køge Landevej 690, 2660 Brøndby Strand');
+  ('66666666666666666666666666666666', 'Wash World Brøndby Strand', 'Gammel Køge Landevej 690, 2660 Brøndby Strand'),
+  ('77777777777777777777777777777777', 'Wash World Glostrup', 'Formervangen 8, 2600 Glostrup');
